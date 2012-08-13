@@ -1,0 +1,5 @@
+/baseconvert
+/old
+*.a
+*.o
+*.swp
