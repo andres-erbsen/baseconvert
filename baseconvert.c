@@ -8,7 +8,7 @@
 #include "tommath.h"
 typedef unsigned int uint;
 
-/* gcc -O3 -funroll-loops -finline-functions baseconvert.c -lm -ltommath -o baseconvert */
+/* gcc -O3 baseconvert.c -lm -ltommath -o baseconvert */
 
 
 #define USAGE "Usage: baseconvert IN_DIGITS_FILE OUT_DIGITS_FILE\n\
@@ -17,17 +17,17 @@ Data to be converted is read from stdin and results are written to stdout.\n\
 Example: echo -n 15 | ./baseconvert decimal.txt base2.txt # gives 1111"
 
 /** all shortcuts available using 32-bit unsigned integers **/
-/* BIGGER_RADIX_GROUP[i] digits of base BIGGER_RADIX[i] can be converted to */
-/* SMALLER_RADIX_GROUP[i] digits if base SMALLER_RADIX[i] or vice versa */
-/* for l in zip(*filter(lambda l: int(l[0])**int(l[1]) < 2**32, (re.findall('[0-9]+',s) for s in open('shortcuts.txt').read().splitlines()))): print('{'+', '.join(l),'};\n') */
+/* BIGGER_GROUP[i] digits of base with BIGGER_MAX_DIGIT[i] can be converted to */
+/* SMALLER_GROUP[i] digits if base SMALLER_MAX_DIGIT[i] or vice versa */
+/* for l in zip(*filter(lambda l: int(l[0])**int(l[1]) < 2**32, (re.findall('[0-9]+',s) for s in open('shortcuts.txt').read().splitlines()))): print('{'+', '.join([str(int(i)-1) for i in l]),'};\n') */
 #define N_TRICKS 47
-static const uint16_t BIGGER_RADIX[N_TRICKS] = {4, 8, 8, 9, 16, 16, 16, 25, 27, 27, 32, 32, 32, 32, 36, 49, 64, 64, 64, 64, 64, 81, 81, 81, 100, 121, 125, 125, 128, 128, 128, 128, 144, 169, 196, 216, 216, 225, 243, 243, 243, 243, 256, 256, 256, 256, 256};
+static const uint16_t BIGGER_MAX_DIGIT[N_TRICKS] = {3, 7, 7, 8, 15, 15, 15, 24, 26, 26, 31, 31, 31, 31, 35, 48, 63, 63, 63, 63, 63, 80, 80, 80, 99, 120, 124, 124, 127, 127, 127, 127, 143, 168, 195, 215, 215, 224, 242, 242, 242, 242, 255, 255, 255, 255, 255 };
 
-static const uint16_t BIGGER_RADIX_GROUP[N_TRICKS] = {1, 1, 2, 1, 1, 1, 3, 1, 1, 2, 1, 2, 3, 4, 1, 1, 1, 1, 1, 2, 5, 1, 1, 3, 1, 1, 1, 2, 1, 2, 3, 4, 1, 1, 1, 1, 2, 1, 1, 2, 3, 4, 1, 1, 3, 1, 3};
+static const uint16_t BIGGER_GROUP[N_TRICKS] = {0, 0, 1, 0, 0, 0, 2, 0, 0, 1, 0, 1, 2, 3, 0, 0, 0, 0, 0, 1, 4, 0, 0, 2, 0, 0, 0, 1, 0, 1, 2, 3, 0, 0, 0, 0, 1, 0, 0, 1, 2, 3, 0, 0, 2, 0, 2 };
 
-static const uint16_t SMALLER_RADIX[N_TRICKS] = {2, 2, 4, 3, 2, 4, 8, 5, 3, 9, 2, 4, 8, 16, 6, 7, 2, 4, 8, 16, 32, 3, 9, 27, 10, 11, 5, 25, 2, 4, 8, 16, 12, 13, 14, 6, 36, 15, 3, 9, 27, 81, 2, 4, 8, 16, 64};
+static const uint16_t SMALLER_MAX_DIGIT[N_TRICKS] = {1, 1, 3, 2, 1, 3, 7, 4, 2, 8, 1, 3, 7, 15, 5, 6, 1, 3, 7, 15, 31, 2, 8, 26, 9, 10, 4, 24, 1, 3, 7, 15, 11, 12, 13, 5, 35, 14, 2, 8, 26, 80, 1, 3, 7, 15, 63 };
 
-static const uint16_t SMALLER_RADIX_GROUP[N_TRICKS] = {2, 3, 3, 2, 4, 2, 4, 2, 3, 3, 5, 5, 5, 5, 2, 2, 6, 3, 2, 3, 6, 4, 2, 4, 2, 2, 3, 3, 7, 7, 7, 7, 2, 2, 2, 3, 3, 2, 5, 5, 5, 5, 8, 4, 8, 2, 4};
+static const uint16_t SMALLER_GROUP[N_TRICKS] = {1, 2, 2, 1, 3, 1, 3, 1, 2, 2, 4, 4, 4, 4, 1, 1, 5, 2, 1, 2, 5, 3, 1, 3, 1, 1, 2, 2, 6, 6, 6, 6, 1, 1, 1, 2, 2, 1, 4, 4, 4, 4, 7, 3, 7, 1, 3 };
 
 
 static void die (const char * format, ...) {
@@ -43,26 +43,26 @@ unsigned char ord(char c) {
 }
 
 /** Brute force base conversion using multiprecision arithmetic **/
-uint _baseconvert_dumb( uint in_radix
-                      , uint* in_value /* NOT digits, reverse lookup */
+uint _baseconvert_dumb( uint8_t in_max_digit
+                      , uint8_t* in_value /* NOT digits, reverse lookup */
                       , char* in_chars
                       , uint  in_len
-                      , uint out_radix
+                      , uint8_t out_max_digit
                       , char* out_digits
                       , char* out_chars
                       , uint  out_len )
 {
     /* fprintf(stderr,"dumb conversion...\n"); */
     uint i;
-    unsigned long d = 0;
+    unsigned long d = 0, in_radix = in_max_digit+1, out_radix = out_max_digit+1;
     mp_int acc;
     mp_init(&acc);
-    /* from in_radix to libtom mp_int */
+    /* from input base to libtom mp_int */
     for (i = 0; i < in_len; i++) { /*  acc = acc * in_radix + newdigit  */
         mp_mul_d(&acc, in_radix, &acc);
         mp_add_d(&acc, in_value[ ord(in_chars[i]) ], &acc);
     }
-    /* from mp_int to out_radix */
+    /* from mp_int to output base */
     char* s = out_chars + out_len; /*  start filling in digits from the right  */
     do {
         s--;
@@ -78,27 +78,27 @@ uint _baseconvert_dumb( uint in_radix
 
 /** Clever, groupwise base conversion **/
 /* Get size of groups possible to convert using uint32 state */
-void _baseconvert_group_size_uint32( uint in_radix
-                            , uint out_radix
+void _baseconvert_group_size_uint32( uint8_t in_max_digit
+                            , uint8_t out_max_digit
                             , uint8_t* in_group
                             , uint8_t* out_group)
 {
-    uint bigger_radix, smaller_radix, i;
-    if (in_radix > out_radix) {
-        bigger_radix = in_radix;
-        smaller_radix = out_radix;
+    uint bigger_max_digit, smaller_max_digit, i;
+    if (in_max_digit > out_max_digit) {
+        bigger_max_digit = in_max_digit;
+        smaller_max_digit = out_max_digit;
     } else {
-        bigger_radix = out_radix;
-        smaller_radix = in_radix;
+        bigger_max_digit = out_max_digit;
+        smaller_max_digit = in_max_digit;
     }
     for (i=0; i<N_TRICKS; i++) {
-        if (BIGGER_RADIX[i] == bigger_radix && SMALLER_RADIX[i] == smaller_radix) {
-            if (in_radix > out_radix) {
-                *in_group = BIGGER_RADIX_GROUP[i];
-                *out_group = SMALLER_RADIX_GROUP[i];
+        if (BIGGER_MAX_DIGIT[i] == bigger_max_digit && SMALLER_MAX_DIGIT[i] == smaller_max_digit) {
+            if (in_max_digit > out_max_digit) {
+                *in_group = BIGGER_GROUP[i];
+                *out_group = SMALLER_GROUP[i];
             } else {
-                *in_group = SMALLER_RADIX_GROUP[i];
-                *out_group = BIGGER_RADIX_GROUP[i];
+                *in_group = SMALLER_GROUP[i];
+                *out_group = BIGGER_GROUP[i];
             }
             break;
         }
@@ -135,19 +135,21 @@ void _baseconvert_group_size_uint32( uint in_radix
 } while (0);
 
 
-uint _baseconvert_group_uint32( uint in_radix
-                              , uint* in_value /* NOT digits, reverse lookup */
+uint _baseconvert_group_uint32( uint8_t in_max_digit
+                              , uint8_t* in_value /* NOT digits, reverse lookup */
                               , char* in_chars
                               , uint  in_len
                               , uint8_t in_group
-                              , uint out_radix
+                              , uint8_t out_max_digit
                               , char* out_digits
                               , char* out_chars
                               , uint  out_len 
                               , uint8_t out_group)
 {
     /* fprintf(stderr,"groupwise conversion!\n"); */
-    uint8_t stepsleft = in_group, gotsomething=0;
+    unsigned long in_radix = in_max_digit+1, out_radix = out_max_digit+1;
+    uint8_t stepsleft = in_group;
+    char gotsomething=0;
     char* s = out_chars;
     uint32_t acc = 0;
     int i, j;
@@ -165,48 +167,47 @@ uint _baseconvert_group_uint32( uint in_radix
 
 
 /* Is this a valid number in base X? */
-int baseconvert_is_valid_base(uint radix, char* digits, char* chars, uint len) {
-    if (radix < 2) return 0;
+int baseconvert_is_valid_base(uint8_t max_digit, char* digits, char* chars, uint len) {
+    if (max_digit == 0) return 0;
     if (len == 0) return 0;
     char allowed[256];
     memset(allowed,0,256);
     int i;
-    for (i=0; i<radix; i++) allowed[ord(digits[i])] = 1;
+    for (i=0; i<=max_digit; i++) allowed[ord(digits[i])] = 1;
     for (i=0; i<len; i++) if (!allowed[ord(chars[i])]) return 0;
     return 1;
 }
 
 /* Wrap groupwise and bignum-based conversion, automatically choose between them */
-uint baseconvert( uint in_radix
+uint baseconvert( uint8_t in_max_digit
                  , char* in_digits
                  , char* in_chars
                  , uint  in_len
-                 , uint out_radix
+                 , uint8_t out_max_digit
                  , char* out_digits
                  , char* out_chars
                  , uint  out_len )
 {
     uint i;
     /* digit -> value lookup table */
-    uint in_value[256];
-	for (i=0; i<in_radix; i++) in_value[ord(in_digits[i])] = i;
+    uint8_t in_value[256];
+	for (i=0; i<=in_max_digit; i++) in_value[ord(in_digits[i])] = i;
     /** Find out whether there exists a shortcut **/
     uint8_t in_group=0, out_group=0;
-    _baseconvert_group_size_uint32(in_radix, out_radix, &in_group, &out_group);
+    _baseconvert_group_size_uint32(in_max_digit, out_max_digit, &in_group, &out_group);
     if (in_group && out_group) {
         /** Convert `in_group` digits to `out_group` digits using uint32 **/
-        /* fprintf(stderr, "%d^%d == %d^%d\n", in_radix, in_group, out_radix, out_group); */
-        return _baseconvert_group_uint32( in_radix, in_value, in_chars, in_len
-                                        , in_group, out_radix, out_digits
+        return _baseconvert_group_uint32( in_max_digit, in_value, in_chars, in_len
+                                        , in_group, out_max_digit, out_digits
                                         , out_chars, out_len, out_group);
     }
     /* If nothing else works... */
-    return _baseconvert_dumb(in_radix, in_value, in_chars, in_len,
-                            out_radix, out_digits, out_chars, out_len);
+    return _baseconvert_dumb(in_max_digit, in_value, in_chars, in_len,
+                            out_max_digit, out_digits, out_chars, out_len);
 }
 
-uint baseconvert_targetlen(uint in_radix, uint out_radix, uint in_len) {
-    return 1 + in_len * log(in_radix)/log(out_radix) * 1.0000001;
+uint baseconvert_targetlen(uint8_t in_max_digit, uint8_t out_max_digit, uint in_len) {
+    return 1 + in_len * log(in_max_digit+1)/log(out_max_digit+1) * 1.0000001;
 }
 
 /* Read all that there is from a file handle */
@@ -270,16 +271,17 @@ int main(int argc, char** argv) {
 	if (out_digits == NULL) die("Out digits file bad.");
 	/* fwrite(out_digits, out_radix, 1, stderr); putchar('\n'); */
     
+    uint8_t in_max_digit = in_radix-1, out_max_digit = out_radix-1;
     char* stdinbytes;
     freopen(NULL, "rb", stdin);
     uint in_len = freadall(&stdinbytes,stdin);
-    if (!baseconvert_is_valid_base(in_radix,in_digits,stdinbytes,in_len)) {
+    if (!baseconvert_is_valid_base(in_max_digit,in_digits,stdinbytes,in_len)) {
         die("Bad input. Maybe because of a newline at the end?");
     }
-    uint out_len = baseconvert_targetlen(in_radix, out_radix, in_len);
+    uint out_len = baseconvert_targetlen(in_max_digit, out_max_digit, in_len);
     char* converted = malloc(out_len);
-    out_len = baseconvert(in_radix, in_digits, stdinbytes, in_len,
-                         out_radix, out_digits, converted, out_len);
+    out_len = baseconvert(in_max_digit, in_digits, stdinbytes, in_len,
+                         out_max_digit, out_digits, converted, out_len);
 	if (fwrite(converted, out_len, 1, stdout) != 1) perror("Writing final output");
     return 0;
 }
