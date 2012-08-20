@@ -36,7 +36,7 @@ prop_convertback baseA baseB (NonEmpty for_digitValues) =
        then digits' == B.pack [zeroA]
        else digits' == (B.dropWhile (==zeroA) digits)
 
-main = quickCheckWith (stdArgs {maxSuccess = 100000}) prop_convertback
+main = quickCheck prop_convertback
 -- do
 --  let digitDecs = [0]
 --  let baseA = base "01"
