@@ -1,4 +1,5 @@
 /* vim: set ts=4 sw=4 expandtab : */
+#define NDEBUG
 #include <stdio.h>
 #include <math.h>
 #include <stdint.h>
@@ -303,7 +304,7 @@ int main(int argc, char** argv) {
     if (!baseconvert_is_valid_base(in_max_digit,in_digits,stdinbytes,in_len)) {
         if (stdinbytes[in_len-1] == '\n')
             die("Bad input. Maybe because of a newline at the end?");
-        else die("Bad input.);
+        else die("Bad input.");
     }
     uint out_len = baseconvert_targetlen(in_max_digit, out_max_digit, in_len);
     char* converted = malloc(out_len);
