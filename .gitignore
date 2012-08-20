@@ -1,5 +1,6 @@
 /baseconvert
 /old
+/readme.html
 *.a
 *.o
 *.swp
