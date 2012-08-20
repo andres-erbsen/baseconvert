@@ -151,17 +151,16 @@ uint _baseconvert_group_uint32( uint8_t in_max_digit
                               , uint8_t out_group_size)
 {
     /* fprintf(stderr,"groupwise conversion!\n"); */
-    unsigned long in_radix = in_max_digit+1, out_radix = out_max_digit+1;
+    uint32_t acc = 0, in_radix = in_max_digit+1, out_radix = out_max_digit+1;
     unsigned char stepsleft = in_group_size;
     char *nextgroup = out_chars, *group = 0, *s = 0;
-    uint32_t acc = 0;
     uint i;
     /* fprintf(stderr,"%u %u\n",in_group_size, out_group_size);*/
 
     /* pretend leading 0s */
     for (i=0; i<(in_group_size-in_len%in_group_size)%in_group_size; i++) STEP(0); 
     for (i=0; i<in_len; i++) STEP( in_value[ ord(in_chars[i]) ] );
-    if (stepsleft != in_group_size) SHAKE();
+    assert (stepsleft == in_group_size);
     if (nextgroup == out_chars) {
         *nextgroup = *out_digits;
         nextgroup++;
