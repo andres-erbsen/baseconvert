@@ -118,7 +118,7 @@ void _baseconvert_group_size_uint32( uint8_t in_max_digit
         s--; \
     } \
     s++; /* now s >= group, could have been s = group - 1 otherwise */ \
-    /* omit leading 0 groups */ \
+    /* omit leading 0s */ \
     if (s > group) { \
         memmove(group, s, nextgroup - s); \
         nextgroup = group + (nextgroup - s); \
@@ -217,6 +217,7 @@ uint baseconvert( uint8_t in_max_digit
 }
 
 uint baseconvert_targetlen(uint8_t in_max_digit, uint8_t out_max_digit, uint in_len) {
+    if (in_max_digit == out_max_digit) return in_len;
     return 1 + in_len * log(in_max_digit+1)/log(out_max_digit+1) * 1.0000002;
 }
 
