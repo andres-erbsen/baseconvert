@@ -1,22 +1,12 @@
 /* vim: set ts=4 sw=4 expandtab : */
-#define NDEBUG
-#include <stdio.h>
+#include "baseconvert.h"
 #include <math.h>
 #include <stdint.h>
-#include <stdarg.h>
-#include <string.h>
 #include <assert.h>
 #include "tommath.h"
+
 typedef unsigned int uint;
 
-/* gcc -O3 -DEXECUTABLE baseconvert.c -lm -ltommath -o baseconvert */
-
-#define USAGE "Usage: baseconvert IN_DIGITS_FILE OUT_DIGITS_FILE\n\
-Digits files: ith character represents i in that base.\n\
-Data to be converted is read from stdin and results are written to stdout.\n\
-Example: echo -n 15 | ./baseconvert decimal.txt base2.txt # gives 1111"
-
-/** all shortcuts available using 32-bit unsigned integers **/
 /* BIGGER_GROUP[i] digits of base with BIGGER_MAX_DIGIT[i] can be converted to */
 /* SMALLER_GROUP[i] digits if base SMALLER_MAX_DIGIT[i] or vice versa */
 /* based on shortcuts.txt, all but the last 4 can be used with uint32 */
@@ -31,14 +21,6 @@ static const uint16_t SMALLER_MAX_DIGIT[N_TRICKS] = {1, 1, 3, 2, 1, 3, 7, 4, 2, 
 
 static const uint16_t SMALLER_GROUP[N_TRICKS] = {2,3,3,2,4,2,4,2,3,3,5,5,5,5,2,2,6,3,2,3,6,4,2,4,2,2,3,3,7,7,7,7,2,2,2,3,3,2,5,5,5,5,8,4,8,2,4,  7,7,8,8};
 
-
-static void die (const char * format, ...) {
-    va_list vargs;
-    va_start(vargs, format);
-    vfprintf(stderr, format, vargs);
-    fprintf(stderr, "\n");
-    exit (1);
-}
 
 unsigned char ord(char c) {
     return (unsigned char) c;
@@ -80,7 +62,7 @@ uint _baseconvert_dumb( uint8_t in_max_digit
 
 /** Clever, groupwise base conversion **/
 /* Get size of groups possible to convert using uint32 state */
-void _baseconvert_group_size( uint m
+void baseconvert_group_size( uint m
                             , uint n
                             , uint8_t in_max_digit
                             , uint8_t out_max_digit
@@ -110,7 +92,7 @@ void _baseconvert_group_size( uint m
 
 }
 
-/* These are macros because they will be reused for uint64 shortcuts */
+/* These are macros because they will be reused for uint32 and uint64 shortcuts */
 #define SHAKE() do { \
     /*fprintf(stderr," -> %u -> ",acc);*/ \
     group = nextgroup; \
@@ -182,7 +164,7 @@ ROLL(uint64_t)
 
 
 /* Is this a valid number in base X? */
-int baseconvert_is_valid_base(uint8_t max_digit, char* digits, char* chars, uint len) {
+int baseconvert_is_valid_in_base(uint8_t max_digit, char* digits, char* chars, uint len) {
     if (max_digit == 0) return 0;
     if (len == 0) return 0;
     char allowed[256];
@@ -211,14 +193,14 @@ uint baseconvert( uint8_t in_max_digit
     /** Find out whether there exists a shortcut **/
     uint8_t in_group=0, out_group=0;
     /** Convert `in_group` digits to `out_group` digits using uint32 **/
-    _baseconvert_group_size(0,N_TRICKS_UINT32,
+    baseconvert_group_size(0,N_TRICKS_UINT32,
                             in_max_digit, out_max_digit, &in_group, &out_group);
     if (in_group && out_group) {
         return _baseconvert_group_uint32_t( in_max_digit, in_value, in_chars, in_len
                                           , in_group, out_max_digit, out_digits
                                           , out_chars, out_len, out_group);
     }
-    _baseconvert_group_size(N_TRICKS_UINT32,N_TRICKS_UINT64,
+    baseconvert_group_size(N_TRICKS_UINT32,N_TRICKS_UINT64,
                             in_max_digit, out_max_digit, &in_group, &out_group);
     if (in_group && out_group) {
         return _baseconvert_group_uint64_t( in_max_digit, in_value, in_chars, in_len
@@ -234,84 +216,3 @@ uint baseconvert_targetlen(uint8_t in_max_digit, uint8_t out_max_digit, uint in_
     if (in_max_digit == out_max_digit) return in_len;
     return 1 + in_len * log(in_max_digit+1)/log(out_max_digit+1) * 1.0000002;
 }
-
-/* Read all that there is from a file handle */
-uint freadall(char** target, FILE* fh) {
-    uint bufsize = 1024;
-    char *buf = malloc(bufsize);
-    if (buf == NULL) return 0;
-    uint len = 0;
-    while (1) {	
-        if ( (len = len + fread(buf+len,1,bufsize-len,stdin)) == bufsize ) {
-            bufsize *= 2;
-            buf = realloc(buf,bufsize);
-        } else if ( ferror(stdin) ) {
-            perror("Reading everything there is from a handle");
-        }
-        else break; /* EOF */
-    }
-    *target = buf;
-    return len;
-}
-
-#ifdef EXECUTABLE
-int main(int argc, char** argv) {
-    unsigned long in_radix=0, out_radix=0;
-    char *in_digits=NULL, *out_digits=NULL;
-    int i;
-
-    /* Command line arguments */
-	for (i = 1; i < argc; i++) {
-		if (in_digits == NULL) {
-			in_digits = argv[i];
-		} else if (out_digits == NULL) {
-			out_digits = argv[i];
-		} else die(USAGE);
-	}
-	if (in_digits == NULL || out_digits == NULL) die(USAGE);
-
-    /* Read digits of the input base */
-	FILE *fh = fopen(in_digits, "rb");
-	in_digits = NULL;
-	if ( fh != NULL ) {
-		fseek(fh, 0L, SEEK_END);
-		in_radix = ftell(fh);
-		rewind(fh);
-		in_digits = malloc(in_radix);
-		if ( in_digits != NULL ) fread(in_digits, in_radix, 1, fh);
-		fclose(fh);
-	}
-	if (in_digits == NULL) die("In digits file bad.");
-	/* fwrite(in_digits, in_radix, 1, stderr); putchar('\n'); */
-
-	fh = fopen(out_digits, "rb");
-	out_digits = NULL;
-	if ( fh != NULL ) {
-		fseek(fh, 0L, SEEK_END);
-		out_radix = ftell(fh);
-		rewind(fh);
-		out_digits = malloc(out_radix);
-		if ( out_digits != NULL ) fread(out_digits, out_radix, 1, fh);
-		fclose(fh);
-	}
-	if (out_digits == NULL) die("Out digits file bad.");
-	/* fwrite(out_digits, out_radix, 1, stderr); putchar('\n'); */
-    
-    uint8_t in_max_digit = in_radix-1, out_max_digit = out_radix-1;
-    char* stdinbytes;
-    freopen(NULL, "rb", stdin);
-    uint in_len = freadall(&stdinbytes,stdin);
-    if (!baseconvert_is_valid_base(in_max_digit,in_digits,stdinbytes,in_len)) {
-        if (stdinbytes[in_len-1] == '\n')
-            die("Bad input. Maybe because of a newline at the end?");
-        else die("Bad input.");
-    }
-    uint out_len = baseconvert_targetlen(in_max_digit, out_max_digit, in_len);
-    char* converted = malloc(out_len);
-    if (converted == NULL) die("Failed to allocate memory.");
-    out_len = baseconvert(in_max_digit, in_digits, stdinbytes, in_len,
-                         out_max_digit, out_digits, converted, out_len);
-	if (fwrite(converted, out_len, 1, stdout) != 1) perror("Writing final output");
-    return 0;
-}
-#endif

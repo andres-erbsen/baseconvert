@@ -8,8 +8,6 @@ If some number of digits in one base directly corresponds to some other number
 of digits in the other base, baseconvert processes the input in groups of
 that many characters. For example, `1111` in base 2 means `F` in hex, no
 matter which group it is. List of such pairs is in `shortcuts.txt`.
-At the moment this kind of optimization is limited
-to cases where all intermediate values fit into a 32bit unsigned integer.
 
 ### Examples
 Convert a simple number from decimal to hexademical:
